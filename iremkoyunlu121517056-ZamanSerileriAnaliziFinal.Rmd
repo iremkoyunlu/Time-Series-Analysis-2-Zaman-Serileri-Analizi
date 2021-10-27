@@ -1,0 +1,418 @@
+---
+title: "Zaman Serileri Analizi Final"
+author: "Irem Koyunlu 121517056"
+date: "25 01 2021"
+output:
+  html_document:
+    theme: united
+    toc: yes
+---
+
+<style>
+div.blue pre.r { background-color:lightblue; }
+</style>
+
+<div class = "blue">
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# **ZAMAN SERILERI ANALIZI**
+## *LONDRA HEATHROW YAGISLARI 2010-2019 HER GUN ICIN YAGIS VE ORTALAMA SICAKLIK*
+### *Kaynak :https://www.kaggle.com/emafuma/ncei-heathrow-2010-2019*
+
+```{r , echo=FALSE, message=FALSE, warning=FALSE}
+knitr::include_graphics("sicaklik.jpg")
+```
+
+## *VERI SETI ACIKLAMASI;*
+
+Heathrow Havalimani, Ingiltere'nin baskenti Londra'daki altinci ana havalimanindan biridir. Uluslararasi yolcu trafigine gore dunyanin en islek birinci, toplam yolcu trafigine gore ise dunyanin en islek ucuncu havalimanidir Londra'nin 20 mil batisindadir.
+Mevcut veri seti, Ocak 2010'den Aralik 2019'ye kadar Londra Heathrow'da her gun icin yagis ve ortalama gunluk sicakliklari sicakliklari icerir.
+Buradaki fikir, gercek veriler uzerinde kolay ama etkili gorsellestirmelerle deneyler icin kullanilacak cok basit bir zaman serisi veri kumesine sahip olmaktir.
+Veri seti Ulusal Cevresel Bilgi Merkezleri'nden (NCEI) indirilmistir.
+
+## *DEGISKENLER;*
+
+* **DATE:** Veri setimizdeki ilgilenilen tarih.
+* **TAVG:** Veri setimizdeki ilgilenilen ortalama sicaklik.
+* **PRCP:** Veri setimizdeki yagis miktari.
+
+```{r message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+library(fpp2)
+temp <- read.csv("C:/Users/CASPER/Desktop/NCEI Heathrow Meteo Data 2010-2019.csv",header = T)
+
+temp=temp%>%select(c("DATE","TAVG"))
+head(temp,10)
+```
+
+Kullandigimiz verimizin summary kodu ile ozetini inceleyerek degisken turlerine bakalim;
+
+```{r message=FALSE, warning=FALSE}
+summary(temp)
+```
+
+Kullandigimiz verimizdeki degiskenlerimizden olan DATE’ yi **lubridate** kodu ile Year ve Month olarak ayirip **group by** kodu ile gruplandiralim. Ayrica verimize gruplandirdigimiz sutunlari ekleyelim ve yeni **MonthTemp** verisini olusturalim;
+
+```{r message=FALSE, warning=FALSE}
+temp$Month<-lubridate::month(temp$DATE)
+temp$Year<-lubridate::year(temp$DATE)
+temp%>%group_by(Year,Month)%>%summarise(TAVG = mean(TAVG))->MonthTemp
+head(MonthTemp,10)
+```
+
+Year ve Month olarak ayirip gruplandirdigimiz yeni MonthTemp verimizin summary kodu ile ozetini inceleyerek degisken turlerine bakalim;
+
+```{r message=FALSE, warning=FALSE}
+summary(MonthTemp)
+```
+
+Kullandigimiz verimiz icin MonthTemp olarak olusturdugumuz yeni verimiz aylik bir veri oldugu icin frequency degerimizi 12 alalim ve ts kodu ile aylik verimizi zaman serisine cevirelim;
+
+```{r message=FALSE, warning=FALSE}
+MonthTemp<-ts(MonthTemp[,3],start=c(2010,1),frequency =12)
+MonthTemp
+```
+
+Kullandigimiz verimizde olusturdugumuz MonthTemp aylik verimiz icin Zaman Serisi Grafigimizi cizdirelim; 
+
+```{r message=FALSE, warning=FALSE}
+library(fpp2)
+autoplot(MonthTemp) +
+ggtitle("Aylik ortalama Hava Sicakliklari") +
+xlab("Yillar") +ylab("Sicakliklar")
+```
+
+Kullandigimiz verimizde olusturdugumuz MonthTemp aylik verimiz icin Zaman Serisi Grafigimize baktigimizda grafigimizde mevsimsellik oldugu gozukmektedir.Ayrica grafigimizde az da olsa artan trend oldugu gozukmektedir.
+
+Kullandigimiz verimizde olusturdugumuz MonthTemp aylik verimizi test ve train olarak ikiye ayiralim;
+
+```{r message=FALSE, warning=FALSE}
+MonthTemp.train<-window(MonthTemp,end=c(2017,12))
+MonthTemp.test<-window(MonthTemp, start=2018)
+```
+
+# **1.SORU**
+
+- **Training setinizi lineer regresyon, lineer spline ve kubik spline regresyon yaklasimlarini kullanarak modelleyiniz.**
+
+Kullandigimiz verimizde olusturdugumuz MonthTemp aylik verimiz icin olusturdugumuz **MonthTemp.train** setimize Lineer Regresyon Modeli , Lineer Spline Regresyon Modeli ve Cubic Spline Regresyon Modeli olusturalim;
+
+- **Lineer Regresyon Modeli**
+
+Kullandigimiz verimizde **MonthTemp.train** setimizi kullanarak Lineer Regresyon Modelini olusturmak icin tek bir lineer degisken kullanarak kurdugumuz lineer modeldelimizi tslm kodu ile olustururak trend tahmin degerine bakalim.Burada h degerini 10 alarak Lineer Regresyon Modelinin 10 adim ilerisi icin forecast tahminlerine bakalim;
+
+```{r message=FALSE, warning=FALSE}
+h <- 10
+fit.lin <- tslm(MonthTemp.train ~ trend)  
+fc.lin <- forecast(fit.lin, h = h)
+```
+
+Olusturdugumuz Lineer Regresyon Modelimizdeki yani fit.lin'deki trend degerimize bakalim;
+
+```{r message=FALSE, warning=FALSE}
+fit.lin
+```
+
+Olusturdugumuz Lineer Regresyon Modelimizdeki yani fit.lin'deki **trend** degerimize baktigimizda, trend degerimiz 0.01883 cikmistir yani pozitif bir trend gozukmektedir.
+
+- **Lineer Spline Regresyon Modeli**
+
+Kullandigimiz verimizde olusturdugumuz MonthTemp aylik verimiz icin olusturdugumuz **MonthTemp.train** setimizde uc farkli degisken **t** , **t.break1** ve **t.break2** yi ekleyip verimizi uc parcaya bolerek tslm kodu ile Lineer Spline Regresyon Modelimizi olusturalim.
+
+Ekledigimiz t degiskeni 2014 e kadar olan yillar , t.break1 ve t.break2 degiskenleri kirilma noktalaridir.tb1 degiskeni 2014 ve 2017 arasindaki yillar ve tb2 degiskeni 2017 den sonraki yillari gostermektedir. Burada t.new, tb1.new ve tb2.new degiskenleri t,tb1 ve tb2 ye 10 adimlik tahminleri ekleyerek new data olarak data frame'e donusturulmus halleridir.
+
+```{r message=FALSE, warning=FALSE}
+t <- time(MonthTemp.train)
+t.break1 <- 2014
+t.break2 <- 2017
+tb1 <- ts(pmax(0, t - t.break1), start = 2010)
+tb2 <- ts(pmax(0, t - t.break2), start = 2010)
+
+fit.pw <- tslm(MonthTemp.train ~ t + tb1 + tb2) 
+t.new <- t[length(t)] + seq(h)
+tb1.new <- tb1[length(tb1)] + seq(h)
+tb2.new <- tb2[length(tb2)] + seq(h)
+newdata <- cbind(t=t.new, tb1=tb1.new, tb2=tb2.new) %>%
+as.data.frame()
+fc.pw <- forecast(fit.pw, newdata = newdata)
+```
+
+Olusturdugumuz Lineer Spline Regresyon Modelimizdeki yani fit.pw'deki trend degerlerimize bakalim;
+
+```{r message=FALSE, warning=FALSE}
+fit.pw
+```
+
+Ekledigimiz t degiskeni yani 2014 e kadar olan yillarin **trend** degeri 0.3668 cikmistir, **t** deki bir birimlik artis 0.3668’ lik artisa sebep olmaktadir.
+
+tb1 degiskeni yani 2014 ve 2017 arasindaki yillarin **trend** degeri -0.3933 cikmistir, **tb1** deki bir birimlik artis 0.3933’luk azalisa sebep olmaktadir.
+ 
+tb2 degiskeni yani 2017 den sonraki yillarin **trend** degeri 1.3345 cikmistir, **tb2** deki bir birimlik artis 1.3345’lik artisa sebep olmaktadir.
+
+- **Cubic Spline Regresyon Modeli**
+
+Kullandigimiz verimizde olusturdugumuz MonthTemp aylik verimiz icin olusturdugumuz **MonthTemp.train** setimize Cubic Spline Regresyon Modelini olusturalim;
+
+```{r message=FALSE, warning=FALSE}
+fit.spline <- tslm(MonthTemp.train ~ t + I(t^2) + I(t^3) + 
+I(tb1^3) + I(tb2^3))
+fc.spl <- forecast(fit.spline, newdata = newdata)
+```
+
+
+## **A)**
+
+- **Modelleri AICc kriterine gore kiyaslayip daha uygun oldugunu dusunduguniz modeli belirleyiniz.**
+
+- **Lineer Regresyon Modelimizin AICc Degeri**
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugumuz Lineer Regresyon Modelimizin AICc degerine bakalim;
+
+```{r message=FALSE, warning=FALSE}
+CV(fit.lin)
+```
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugumuz Lineer Regresyon Modelimizin **AICc** degeri 3.096399e+02 cikmistir.
+
+- **Lineer Spline Regresyon Modelimizin AICc Degeri**
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugumuz Lineer Spline Regresyon Modelimizin AICc degerine bakalim;
+
+```{r message=FALSE, warning=FALSE}
+CV(fit.pw)
+```
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugumuz Lineer Spline Regresyon Modelimizin **AICc** degeri 313.86210251 cikmistir.
+
+- **Cubic Spline Regresyon Modelimizin AICc Degeri**
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugumuz Cubic Spline Regresyon Modelimizin AICc degerine bakalim;
+
+```{r message=FALSE, warning=FALSE}
+CV(fit.spline)
+```
+
+Kullandigimiz verimizde MonthTemp train setimizi kullanarak olusturdugumuz Cubic Spline Regresyon Modelimizin **AICc** degeri 314.62295541 cikmistir.
+
+Kullandigimiz verimizde **MonthTemp.train** setimizi kullanarak olusturdugumuz Lineer Regresyon Modelimizin ,Lineer Spline Regresyon Modelimizin ve Cubic Spline Regresyon Modelimizin AICc degerlerini karsilastirdigimizda AICc degeri en dusuk cikan modelimiz **Lineer Regresyon Modelimizdir**.
+
+## **B)**
+
+- **Uygun buldugunuz modeli kullanarak test setini tahmin ediniz ve tahminlere iliskin RMSE degerini hesaplayiniz.**
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugum Lineer Regresyon Modelimizin test setini tahmin edelim;
+
+```{r message=FALSE, warning=FALSE}
+forecast(fit.lin, h = h)-> fc.lin
+fc.lin
+```
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugum Lineer Regresyon Modelimizin test setinin tahminlerine iliskin RMSE degerlerini hesaplayalim;
+
+```{r message=FALSE, warning=FALSE}
+accuracy(fc.lin,length(MonthTemp.test))
+```
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugum Lineer Regresyon Modelimizin test setinin tahminlerine iliskin **RMSE** degeri 11.603713 cikmistir.
+
+## **C)**
+
+- **Uygun buldugunuz modelin hem training hem de test seti uzerindeki uyumunu gosteren zaman serisi grafigini cizdiriniz.**
+
+- Kullandigimiz verimizde **MonthTemp.train** setimizi kullanarak olusturdugum Lineer Regresyon Modelimizin Zaman Serisi Grafigini cizdirelim;
+
+```{r message=FALSE, warning=FALSE}
+autoplot(MonthTemp.train) +
+autolayer(fitted(fit.lin), series = "Linear") +
+autolayer(fc.lin, series="Linear", PI=FALSE)+
+xlab("Yillar")+ylab("Sicakliklar")+
+ggtitle("Aylik ortalama Hava Sicakliklari")+
+guides(colour = guide_legend(title =" "))
+```
+
+Kullandigimiz verimizde **MonthTemp.train** setimizi kullanarak olusturdugum Lineer Regresyon Modelimizin Zaman Serisi Grafigini cizdirdigimizde lineer trendimizin tahmini lineer modeldeki tek bir trend degiskeni olan regresyon egrisini vermektedir.Grafikte de goruldugu gibi tahminler cok kaba tahminler yapmaktadir ve grafigimize baktigimizda az da olsa artan trend oldugu gozukmektedir.
+
+- Oncelikle kullandigimiz verimizde **MonthTemp.test** setimizi kullanarak  Lineer Regresyon Modelimizi olusturalim;
+
+```{r message=FALSE, warning=FALSE}
+fit.lintest <- tslm(MonthTemp.test ~ trend)  
+forecast(fit.lintest, h = h)-> fc.lintest
+```
+
+Kullandigimiz verimizde **MonthTemp.test** setimizi kullanarak olusturdugum Lineer Regresyon Modelimizin Zaman Serisi Grafigini cizdirelim;
+
+```{r message=FALSE, warning=FALSE}
+autoplot(MonthTemp.test) +
+autolayer(fitted(fit.lintest), series = "Linear") +
+autolayer(fc.lintest, series="Linear", PI=FALSE)+
+xlab("Yillar")+ylab("Sicakliklar")+
+ggtitle("Aylik ortalama Hava Sicakliklari")+
+guides(colour = guide_legend(title =" "))
+```
+
+Kullandigimiz verimizde **MonthTemp.test** setimizi kullanarak olusturdugum Lineer Regresyon Modelimizin Zaman Serisi Grafigini cizdirdigimizde lineer trendimizin tahmini lineer modeldeki tek bir trend degiskeni olan regresyon egrisini vermektedir.Grafikte de goruldugu gibi tahminler cok kaba tahminler yapmaktadir ve grafigimize baktigimizda az da olsa artan trend oldugu gozukmektedir.
+
+## **D)**
+
+- **Hatalara iliskin varsayimlari kontrol ediniz.**
+
+Kullandigimiz verimize en uygun cikan modelimiz **Lineer Regresyon Modelimiz** ciktigindan,Lineer Regresyon Modelimizin artiklari icin checkresiduals komutu ile hatalara iliskin varsayimlari kontrol edelim;
+
+```{r message=FALSE, warning=FALSE}
+checkresiduals(fit.lin)
+```
+
+
+- Kullandigimiz verimize en uygun cikan modelimiz yani Lineer Regresyon Modelimizin **Breusch-Godfrey** Test sonucumuza baktigimizda p value degerimiz 2.668e-10 yani yaklasik 0 cikmistir.P value degerimiz 0.05 degerinden kucuk ciktigi icin **H0** yani **"Artiklar arasinda otokorelasyon problemi yoktur"** hipotezini **red** ederiz. Bu sonuc ile birlikte Lineer Regresyon Modelimizin otokorelasyon problemi oldugu gozukmektedir. 
+
+- Sacilim Grafigimize baktigimizda Lineer Regresyon Modelimizin artiklari 0 etrafinda rastgele dagildigi gozukmektedir.
+
+- Otokorelasyon Grafigimize baktigimizda Lineer Regresyon Modelimiz icin laglerden bazilari mavi sinir cizgisini gectigi icin artiklarin otokorelasyon problemi oldugu gozukmektedir.
+
+- Normal Dagilim Grafigimize baktigimizda Lineer Regresyon Modelimiz icin artiklarin normal dagilmadigi gozukmektedir.
+
+# **2.SORU**
+
+## **A)**
+
+- **Uygun hareketli ortalama (moving average) yontemini secip verinizin trend bilesenini belirleyiniz ve orijinal veri uzerinde grafikleyiniz.**
+
+Kullandigimiz verimizde olusturdugumuz **MonthTemp** verimiz aylik bir veri oldugundan Moving Average m degerimizi 12 olarak alalim.Burada m degerini 1 aldigimiz zaman bize orijinal seriyi vermektedir. m degerimiz ne kadar yuksekse trend componentimiz o kadar duzlesmektedir ve hareketlilik azalmaktadir.
+
+MonthTemp aylik verimiz icin **12-MA** alarak trend dongusunu gormek icin orijinal verilerle birlikte Moving Avarage Yonteminin Grafigini cizdirelim;
+
+```{r message=FALSE, warning=FALSE}
+autoplot(MonthTemp, series="Data") +
+autolayer(ma(MonthTemp,12), series="12-MA") +
+xlab("Yillar") + ylab("Sicakliklar") +
+ggtitle("Aylik ortalama Hava Sicakliklari")+
+scale_colour_manual(values=c("Data"="grey50","12-MA"="red"),
+breaks=c("Data","12-MA"))
+```
+
+Egilim dongusu tahminlerin duzgunlugunu belirler ve ayni zamanda daha buyuk bir m daha yumusak bir egri anlamina gelir.Moving Avarage Yonteminin Grafigini inceledigimizde aylik verilerde egilim dongusunu yani trendi tahmin etmek icin 12-MA kullanildigindan trend tahmini genel olarak yapilamamistir.
+
+## **B)**
+
+- **Uygun STL ayristirmasi ile verinizi ayristirip grafikleyiniz.**
+
+- **STL AYRISIMI**
+
+mstl kodu, **s.window =13** kullanarak uygun bir otomatik STL ayristirma saglar ve t.window da otomatik olarak secilir.Bu genellikle mevsime fazla uyum saglamak ve zamanla yavasca degismesine izin vermek arasinda iyi bir denge saglar.
+
+Kullandigimiz verimizde olusturdugumuz **MonthTemp** verimizde STL Ayrisimi yapmak icin  mstl kodumuzu kullanarak fit.stl modelimizi olusturalim;
+
+```{r message=FALSE, warning=FALSE}
+MonthTemp %>% mstl(s.window=13, robust=TRUE) -> fit.stl
+```
+
+Kullandigimiz verimizde olusturdugumuz **MonthTemp** verimizde STL Ayrisimi yapmak icin  **mstl** kodumuzu kullanarak olusturdugumu fit.stl modelimizin grafigini cizdirelim;
+
+```{r message=FALSE, warning=FALSE}
+autoplot(fit.stl)
+```
+
+- Kullandigimiz verimiz icin olusturdugumuz MonthTemp verimizde **STL Ayrisimi** yaptigimizda bu ayrisim mevsimsellik ve trendi net bir sekilde gormemizde ve verimizin yapisini incelememizde bize yardimci olur.
+
+- Kullandigimiz verimiz icin olusturdugumuz MonthTemp verimizde cizdirdigimiz **Data Ciktimiz** orijinal serinin Zaman Serisi Grafigini yani autoplotunu vermektedir.Bu grafige baktigimizda mevsimselligin varligi gozukmektedir.
+
+- Kullandigimiz verimiz icin olusturdugumuz MonthTemp verimizde cizdirdigimiz Moving Average ile olusturulan **Trend Ciktimiza** baktigimizda az da olsa artan bir trend oldugu gozukmektedir.
+
+-  Kullandigimiz verimiz icin olusturdugumuz MonthTemp verimizde cizdirdigimiz **Seasonal12 Ciktimiza** baktigimizda mevsimsellik oldugu gozukmektedir.Grafige baktigimizda mevsimselligin artis veya azalis gostermedigini yani mevsimselligin her yil sabit kaldigi gozukmektedir.
+
+-  Kullandigimiz verimiz icin olusturdugumuz MonthTemp verimizde cizdirdigimiz **Remainder Ciktimiza**  baktigimizda aylik verimizden trend ve mevsimselligin cikarildigi zamanki verimizin grafigi gozukmektedir. Ayrica Remainder grafigi bize verimizin trend ve mevsimsellik tarafindan aciklanamayan kismini gostermektedir.
+
+## **C)**
+
+- **Verinizdeki trend ve mevsimsellik bilesenlerinin gucunu belirleyiniz.**
+
+Kullandigimiz verimizde degisken varyanslilik heteroscedasticity problemi var ise yani zaman ile verinin varyasyonunda bir degisiklik oluyor ise carpimsallik soz konusudur,degisken varyanslilik heteroscedasticity problemi yok ise veride toplamsal bir ayrisim kullanilir.Soruda bizden degisken varyansliligi test etmemiz istenmedigi icin trend ve mevsimselligin gucunu iki sekilde de inceleyelim.
+
+Kullandigimiz verimiz icin olusturdugumuz MonthTemp verimizdeki trend ve mevsimsellik bilesenlerinin gucunu belirlememiz icin;
+
+Mevsimsel bilesenini belirlemek icin **seasonal** kodunu kullanalim;  
+
+```{r message=FALSE, warning=FALSE}
+seasonal(fit.stl)->s
+```
+
+Trend bilesenini belirlemek icin **trendycyle** kodunu kullanalim;
+
+```{r message=FALSE, warning=FALSE}
+trendcycle(fit.stl)->t
+```
+
+Ramainder bilesenini belirlemek icin **remainder** kodunu kullanalim;
+
+```{r message=FALSE, warning=FALSE}
+remainder(fit.stl)->r
+```
+
+Kullandigimiz verimiz icin olusturdugumuz MonthTemp verimizdeki trend ve mevsimsellik bilesenlerinin degerlerine bakalim;
+
+- **Toplamsal Trend Ve Toplamsal Mevsimsellik**
+
+```{r message=FALSE, warning=FALSE}
+ToplamsalTrend<-max(0, (1-(var(r)/var(t+r))))
+ToplamsalTrend
+
+ToplamsalMevsimsellik<-max(0, (1-(var(r)/var(s+r))))
+ToplamsalMevsimsellik
+```
+
+- Olusturdugumuz MonthTemp verimizde guclu bir toplamsal trend var ise toplamsal trend degerimizin sonucu 1'e daha yakin cikmalidir. Verimizdeki toplamsal trend degerimiz 0.1878766 olarak cikmistir. Bu deger 1'e yakin olmadigindan verimizde dusuk bir toplamsal trend vardir.
+
+- Olusturdugumuz MonthTemp verimizde guclu bir toplamsal mevsimsellik var ise toplamsal mevsimsellik degerimizin sonucu 1'e daha yakin cikmalidir. Verimizdeki toplamsal mevsimsellik degerimiz 0.9305752 olarak cikmistir. Bu deger 1'e yakin oldugundan verimizde guclu bir toplamsal mevsimsellik vardir.
+
+- **Carpimsal Trend Ve Carpimsal Mevsimsellik**
+
+```{r message=FALSE, warning=FALSE}
+CarpimsalTrend<-max(0, (1-(var(r)/var(t*r))))
+CarpimsalTrend
+
+
+CarpimsalMevsimsellik<-max(0, (1-(var(r)/var(s*r))))
+CarpimsalMevsimsellik
+```
+
+- Olusturdugumuz MonthTemp verimizde guclu bir carpimsal trend var ise carpimsal trend degerimizin sonucu 1'e daha yakin cikmalidir.Verimizdeki carpimsal trend degerimiz 0.9924062 olarak cikmistir. Bu deger 1'e yakin oldugundan verimizde guclu bir carpimsal trend vardir.
+
+- Olusturdugumuz MonthTemp verimizde guclu bir carpimsal mevsimsellik var ise carpimsal mevsimsellik degerimizin sonucu 1'e daha yakin cikmalidir.Verimizdeki carpimsal mevsimsellik degerimiz 0.9562956 olarak cikmistir. Bu deger 1'e yakin oldugundan verimizde guclu bir carpimsal mevsimsellik vardir.
+
+
+## **D)**
+
+- **Training set uzerinde STL ayristirmasini kullanarak, test setinizi tahmin ediniz. Orijinal veri uzerine tahminlerinizi grafikleyip tahminlere iliskin RMSE degerini hesaplayiniz.**
+
+Kullandigimiz verimizde **MonthTemp.train** setimiz uzerinde STL Ayrisimi yapmak icin mstl kodumuzu kullanarak train.fit.stl modelimizi olusturalim;
+
+```{r message=FALSE, warning=FALSE}
+MonthTemp.train %>% mstl(s.window=13, robust=TRUE) -> train.fit.stl
+```
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugumuz STL Ayrisimi Modelimizin test setini tahmin edelim;
+
+```{r message=FALSE, warning=FALSE}
+fc.train.fit.stl<-forecast(train.fit.stl)
+fc.train.fit.stl
+```
+
+Kullandigimiz aylik MonthTemp verimiz yani orijinal verimiz uzerinde tahminlerinizi grafikleyelim;
+
+```{r message=FALSE, warning=FALSE}
+autoplot(MonthTemp) +
+autolayer(fc.train.fit.stl,PI=FALSE)+xlab("Yillar")+ylab("Sicakliklar")+guides(colour=guide_legend(title="Forecast"))
+```
+
+Kullandigimiz aylik MonthTemp verimiz yani orijinal verimiz uzerinde tahminlerinizin grafigini inceledigimizde; tahminlerimiz yani grafikte gozuken mavi cizgiler orijinal verimizin yani siyah cizgizlerin tam ustunde oldugu icin orijinal verimizi iyi tahmin etmistir.
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugumuz STL Ayrisimi Modelimizin tahminlerine iliskin RMSE degerlerini hesaplayalim;
+
+```{r message=FALSE, warning=FALSE}
+accuracy(fc.train.fit.stl,length(MonthTemp.test))
+```
+
+Kullandigimiz verimizde MonthTemp.train setimizi kullanarak olusturdugumuz STL Ayrisimi Modelimizin tahminlerine iliskin **RMSE** degerimiz 18.094323 cikmistir.
